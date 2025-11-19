@@ -1,7 +1,12 @@
 import pandas as pd
 import psycopg2
 
-def load(loaded_data):
+from logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def load(loaded_data, db_url):
     people_df = loaded_data["people"]
     hospitals_df = loaded_data["hospitals"]
     doctors_df = loaded_data["doctors"]
@@ -11,16 +16,27 @@ def load(loaded_data):
     admission_types_df = loaded_data["admission_types"]
     admissions_df = loaded_data["admissions"]
 
-    try:
-        conn = psycopg2.connect(
-            dbname="etl_proj",
-            user="postgres",
-            password="this_is_a_password",
-            host="localhost",
-            port="5432"
-        )
-        cur = conn.cursor()
+    logger.info("Starting load()")
+    logger.info(
+        "Row counts - people=%d, hospitals=%d, doctors=%d, conditions=%d, "
+        "insurance=%d, test_results=%d, admission_types=%d, admissions=%d",
+        len(people_df),
+        len(hospitals_df),
+        len(doctors_df),
+        len(conditions_df),
+        len(insurance_df),
+        len(test_results_df),
+        len(admission_types_df),
+        len(admissions_df),
+    )
 
+    try:
+        logger.info("Connecting to database...")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        logger.info("Database connection established.")
+
+        logger.info("Creating tables if they do not exist...")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS people (
                 person_id   SERIAL PRIMARY KEY,
@@ -91,7 +107,9 @@ def load(loaded_data):
             );
         """)
         conn.commit()
+        logger.info("Tables created/verified successfully.")
 
+        logger.info("Truncating tables and resetting identities...")
         cur.execute("""
             TRUNCATE admission_data,
                      doctors,
@@ -103,7 +121,10 @@ def load(loaded_data):
                      people
             RESTART IDENTITY;
         """)
+        conn.commit()
+        logger.info("Tables truncated.")
 
+        logger.info("Inserting into people...")
         for row in people_df.itertuples(index=False):
             cur.execute(
                 """
@@ -113,7 +134,7 @@ def load(loaded_data):
                 (row.person_id, row.name, row.age, row.gender, row.blood_type)
             )
 
-
+        logger.info("Inserting into hospitals...")
         for row in hospitals_df.itertuples(index=False):
             cur.execute(
                 """
@@ -123,6 +144,7 @@ def load(loaded_data):
                 (row.hospital_id, row.hospital_name)
             )
 
+        logger.info("Inserting into doctors...")
         for row in doctors_df.itertuples(index=False):
             cur.execute(
                 """
@@ -132,6 +154,7 @@ def load(loaded_data):
                 (row.doctor_id, row.doctor_name, row.hospital_id)
             )
 
+        logger.info("Inserting into conditions...")
         for row in conditions_df.itertuples(index=False):
             cur.execute(
                 """
@@ -141,6 +164,7 @@ def load(loaded_data):
                 (row.condition_id, row.condition_name)
             )
 
+        logger.info("Inserting into insurance...")
         for row in insurance_df.itertuples(index=False):
             cur.execute(
                 """
@@ -150,6 +174,7 @@ def load(loaded_data):
                 (row.insurance_id, row.provider_name)
             )
 
+        logger.info("Inserting into test_results...")
         for row in test_results_df.itertuples(index=False):
             cur.execute(
                 """
@@ -159,6 +184,7 @@ def load(loaded_data):
                 (row.test_result_id, row.result_label)
             )
 
+        logger.info("Inserting into admission_types...")
         for row in admission_types_df.itertuples(index=False):
             cur.execute(
                 """
@@ -168,6 +194,7 @@ def load(loaded_data):
                 (row.admission_type_id, row.type_name)
             )
 
+        logger.info("Inserting into admission_data...")
         for row in admissions_df.itertuples(index=False):
             cur.execute(
                 """
@@ -204,13 +231,17 @@ def load(loaded_data):
             )
 
         conn.commit()
+        logger.info("Load completed successfully.")
 
-    except psycopg2.Error as e:
-        print(f"Error in load(): {e}")
+    except psycopg2.Error:
+        logger.exception("Error in load() while working with the database.")
+        if 'conn' in locals():
+            conn.rollback()
+            logger.info("Transaction rolled back due to error.")
 
     finally:
-        print("loaded")
         if 'cur' in locals() and cur:
             cur.close()
         if 'conn' in locals() and conn:
             conn.close()
+        logger.info("Database connection closed. End of load().")
