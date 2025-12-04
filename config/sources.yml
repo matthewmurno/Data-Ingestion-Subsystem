@@ -1,4 +1,4 @@
-# config/sources.yml
+
 defaults:
   db_url: ${DB_URL}
   batch_size: 5000
@@ -7,58 +7,5 @@ defaults:
 sources:
   - name: healthcare_csv
     type: csv
-    path: data/healthcare_dataset.csv
-    target_table: admissions_data
-    pk: [admission_id]
-    schema:
-          admission_id: int
-          person_id:
-            type: int
-            role: fk
-            ref_table: people
-            ref_column: person_id
-
-          doctor_id:
-            type: int
-            role: fk
-            ref_table: doctors
-            ref_column: doctor_id
-
-          condition_id:
-            type: int
-            role: fk
-            ref_table: conditions
-            ref_column: condition_id
-
-          insurance_id:
-            type: int
-            role: fk
-            ref_table: insurance
-            ref_column: insurance_id
-
-          admission_type_id:
-            type: int
-            role: fk
-            ref_table: admission_types
-            ref_column: admission_type_id
-
-          test_result_id:
-            type: int
-            role: fk
-            ref_table: test_results
-            ref_column: test_result_id
-
-          date_of_admission:
-            type: timestamp
-
-          discharge_date:
-            type: timestamp
-
-          billing_amount:
-            type: float
-
-          room_number:
-            type: int
-
-          medication:
-            type: string
+    path: data/healthcare_dataset_dirty.csv
+    

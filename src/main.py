@@ -1,8 +1,8 @@
-from read import read
-from transform import transform
-from load import load
-from clean import clean
-from config import CONFIG, get_source_config
+from src.read import read
+from src.transform import transform
+from src.load import load
+from src.clean import clean
+from src.config import CONFIG, get_source_config
 
 def main():
     db_url = CONFIG["defaults"]["db_url"]

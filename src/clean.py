@@ -1,5 +1,5 @@
 import pandas as pd
-from logger import get_logger
+from src.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -16,15 +16,24 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
     try:
         original_cols = list(df.columns)
         df = df.rename(columns=lambda col: col.lower().strip().replace(" ", "_"))
-        logger.info(
+        logger.debug(
             "Normalized column names. Before: %s | After: %s",
             original_cols,
             list(df.columns),
         )
 
         str_cols = df.select_dtypes(include=["object", "string"]).columns
-        logger.info("Stripping whitespace from string columns: %s", list(str_cols))
+        logger.debug("Stripping whitespace from string columns: %s", list(str_cols))
         df[str_cols] = df[str_cols].apply(lambda s: s.str.strip())
+
+        if len(str_cols) > 0:
+            empty_before = (df[str_cols] == "").sum().sum()
+            df[str_cols] = df[str_cols].replace("", pd.NA)
+            if empty_before > 0:
+                logger.info(
+                    "Converted %d empty string value(s) to NA in string columns",
+                    empty_before,
+                )
 
         if "name" in df.columns:
             df["name"] = df["name"].str.title()
@@ -42,6 +51,17 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
             df["medical_condition"] = df["medical_condition"].str.title()
         if "test_results" in df.columns:
             df["test_results"] = df["test_results"].str.lower()
+
+            valid_results = ["inconclusive", "normal", "abnormal"]
+            invalid_mask = df["test_results"].notna() & ~df["test_results"].isin(valid_results)
+            invalid_count = invalid_mask.sum()
+            if invalid_count > 0:
+                logger.warning(
+                    "test_results: %d value(s) not in %s; setting to NA",
+                    invalid_count,
+                    valid_results,
+                )
+                df.loc[invalid_mask, "test_results"] = pd.NA
         if "admission_type" in df.columns:
             df["admission_type"] = df["admission_type"].str.lower()
 
@@ -58,6 +78,7 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
                 )
                 after_non_null = df[col].notna().sum()
                 coerced = before_non_null - after_non_null
+
                 if coerced > 0:
                     logger.warning(
                         "Column %s: %d value(s) could not be converted to numeric and were set to NaN",
@@ -66,6 +87,40 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
                     )
                 else:
                     logger.info("Column %s converted to numeric successfully.", col)
+
+        if "age" in df.columns:
+            logger.info(
+                "Age range before validation: min=%s, max=%s",
+                df["age"].min(),
+                df["age"].max(),
+            )
+            invalid_age_mask = df["age"].notna() & (
+                (df["age"] < 0) | (df["age"] > 120)
+            )
+            invalid_count = invalid_age_mask.sum()
+            if invalid_count > 0:
+                logger.warning(
+                    "Age: %d value(s) outside valid range (0–120); setting to NA",
+                    invalid_count,
+                )
+                df.loc[invalid_age_mask, "age"] = pd.NA
+
+        if "room_number" in df.columns:
+            logger.info(
+                "Room_number range before validation: min=%s, max=%s",
+                df["room_number"].min(),
+                df["room_number"].max(),
+            )
+            invalid_room_mask = df["room_number"].notna() & (
+                (df["room_number"] < 0) | (df["room_number"] > 100000)
+            )
+            invalid_rooms = invalid_room_mask.sum()
+            if invalid_rooms > 0:
+                logger.warning(
+                    "room_number: %d value(s) outside valid range (0–100000); setting to NA",
+                    invalid_rooms,
+                )
+                df.loc[invalid_room_mask, "room_number"] = pd.NA
 
         if "billing_amount" in df.columns:
             df["billing_amount"] = df["billing_amount"].round(2)
